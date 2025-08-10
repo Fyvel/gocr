@@ -1,0 +1,61 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: Test & Build
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr libtesseract-dev libleptonica-dev
+
+      - name: Verify versions
+        run: |
+          go version
+          tesseract --version || true
+
+      - name: Test (race + coverage)
+        run: go test ./... -race -covermode=atomic -coverprofile=coverage.out && go tool cover -html=coverage.out -o coverage.html
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            coverage.out
+            coverage.html
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Module tidy check
+        run: |
+          go mod tidy
+          git diff --exit-code || (echo "Run 'go mod tidy' and commit changes" && exit 1)
+
+      - name: Build
+        run: go build -v ./...

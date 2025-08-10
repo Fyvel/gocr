@@ -1,0 +1,8 @@
+.DS_Store
+coverage/*
+output/*
+images/*
+examples/*
+
+ocr-tool
+!*/ocr-tool

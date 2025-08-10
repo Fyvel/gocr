@@ -29,7 +29,6 @@ func NewDataExtractor() *DataExtractor {
 func (de *DataExtractor) ExtractFromJson(data json.RawMessage, filename string) *ExtractedData {
 	dataStr := string(data)
 
-	// log.Printf("Extracting data from JSON: %s\n", dataStr)
 	extractedData := ExtractedData{
 		Filename: filename,
 		Name:     "",
@@ -41,10 +40,9 @@ func (de *DataExtractor) ExtractFromJson(data json.RawMessage, filename string) 
 	if err := json.Unmarshal([]byte(dataStr), &extractedData); err != nil {
 		return &ExtractedData{
 			Filename: filename,
+			Text:     dataStr,
 		}
 	}
-
-	// log.Printf("Extracted data from %s: %+v\n", filename, extractedData)
 
 	if extractedData.Text != "" {
 		return &ExtractedData{
@@ -69,7 +67,6 @@ func (de *DataExtractor) ExtractFromJson(data json.RawMessage, filename string) 
 func (de *DataExtractor) extractEmail(text string) string {
 	emails := emailRegex.FindAllString(text, -1)
 	if len(emails) == 0 {
-		// log.Printf("No emails found in text: %s\n", text)
 		return ""
 	}
 	if len(emails) > 1 {
@@ -79,11 +76,9 @@ func (de *DataExtractor) extractEmail(text string) string {
 }
 
 func (de *DataExtractor) extractPhone(text string) string {
-	// log.Printf("Extracting phone from text: %s\n", text)
 	// First try with original text
 	phones := phoneRegex.FindAllString(text, -1)
 	if len(phones) == 0 {
-		// log.Printf("No phones found in original text: %s\n", text)
 		return ""
 	}
 

@@ -7,7 +7,12 @@ import (
 	"ocr-tool/internal/ocr"
 )
 
-func enhanceImage(ctx context.Context, files <-chan string, results chan<- string, errChan chan<- error) {
+type enhancedChanItem struct {
+	Path    string
+	release func()
+}
+
+func enhanceImage(ctx context.Context, files <-chan string, results chan<- enhancedChanItem, throttledChan chan struct{}, errChan chan<- error) {
 	ctxClients := ctx.Value(clientsKey)
 	proc, ok := ctxClients.(*Clients)
 	if !ok {
@@ -23,19 +28,30 @@ func enhanceImage(ctx context.Context, files <-chan string, results chan<- strin
 			return
 		}
 
-		logger.DebugLog("[enhanceImage]: enhancing file %s", file)
+		select {
+		case throttledChan <- struct{}{}:
+		case <-ctx.Done():
+			logger.DebugLog("[enhanceImage]: context done before acquiring semaphore for %s", file)
+			return
+		}
+
+		logger.DebugLog("[enhanceImage]: enhancing file %s (in-flight permits=%d)", file, len(throttledChan))
 		processed, err := imageProcessor.EnhanceQuality(file)
 		if err != nil {
+			<-throttledChan
 			logger.DebugLog("[enhanceImage]: error processing %s: %v", file, err)
 			errChan <- fmt.Errorf("preprocessing image %s: %w", file, err)
 			continue
 		}
 
+		release := func() { <-throttledChan }
+
 		logger.DebugLog("[enhanceImage]: sending processed file %s", processed)
 		select {
-		case results <- processed:
+		case results <- enhancedChanItem{Path: processed, release: release}:
 		case <-ctx.Done():
 			logger.DebugLog("[enhanceImage]: context done while sending %s", processed)
+			release()
 			return
 		}
 	}

@@ -35,6 +35,12 @@ const clientsKey contextKey = "all_my_clients"
 
 const outputFileKey contextKey = "output_file"
 
+const (
+	enhancedImageThreshold = 5
+	ocrProcessorThreshold  = 2 // hard limit on OCR workers for now
+	channelBufferSize      = 10
+)
+
 func Run(engineType string, directory string, outputFile string) (writes map[string]data.ExtractedData, failures map[string]error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -61,11 +67,12 @@ func Run(engineType string, directory string, outputFile string) (writes map[str
 	ctx = context.WithValue(ctx, clientsKey, clients)
 	ctx = context.WithValue(ctx, outputFileKey, outputFile)
 
-	errChan := make(chan error, 10)                          // Buffered channel to collect errors
-	files := make(chan string)                               // Unbuffered channel for file paths
-	enhancedChan := make(chan string, 2)                     // Bounded buffer to throttle image preprocessing
-	ocrChan := make(chan ocr.OCRResult)                      // Buffered channel for OCR results from enhanced images
-	extractChan := make(chan result[data.ExtractedData], 10) // Buffered channel for extraction tasks (OCR results to extracted data)
+	errChan := make(chan error, channelBufferSize) // Buffered channel to collect errors
+	files := make(chan string)                     // Unbuffered channel for file paths
+	enhancedChan := make(chan enhancedChanItem)
+	throttledChan := make(chan struct{}, enhancedImageThreshold)            // Limiter channel limiting number of enhanced images that have not yet completed OCR
+	ocrChan := make(chan ocr.OCRResult)                                     // Buffered channel for OCR results from enhanced images
+	extractChan := make(chan result[data.ExtractedData], channelBufferSize) // Buffered channel for extraction tasks (OCR results to extracted data)
 	results := &writeResult[data.ExtractedData]{
 		writes:   make(map[string]data.ExtractedData), // Map to store extracted data
 		failures: make(map[string]error),              // Map to store failures
@@ -80,12 +87,12 @@ func Run(engineType string, directory string, outputFile string) (writes map[str
 
 	go func() {
 		defer close(enhancedChan)
-		logger.DebugLog("Starting [enhanceImage] goroutine")
-		enhanceImage(ctx, files, enhancedChan, errChan)
+		logger.DebugLog("Starting [enhanceImage] goroutine (semaphore-limited)")
+		enhanceImage(ctx, files, enhancedChan, throttledChan, errChan)
 		defer logger.DebugLog("[enhanceImage] goroutine finished")
 	}()
 
-	processCount := 2 // hard limit on OCR workers for now
+	processCount := ocrProcessorThreshold
 	var wg sync.WaitGroup
 
 	for i := 0; i < processCount; i++ {
@@ -105,7 +112,7 @@ func Run(engineType string, directory string, outputFile string) (writes map[str
 
 	// fan-out - forward ocr results to extraction + cleanup
 	extractInput := make(chan ocr.OCRResult)
-	cleanupInput := make(chan ocr.OCRResult, 10) // Buffered channel for cleanup files created during enhancement
+	cleanupInput := make(chan ocr.OCRResult, channelBufferSize) // Buffered channel for cleanup files created during enhancement
 
 	go func() {
 		logger.DebugLog("Starting [forwardChan] for ocrChan -> extractInput, cleanupInput")

@@ -61,8 +61,8 @@ func (o *OllamaEngine) ProcessImage(imagePath string) (json.RawMessage, error) {
 		Model: o.model,
 		Prompt: `
 		Perform OCR on the following image and fill out the JSON object below
-		{ "Name": "", "Email": "", "Phone": "", "Tags": ""}
-		For missing properties use empty strings.
+		{ "Name": "", "Email": "", "Phone": "", "Tags": []}
+		Leave missing properties empty.
 				`,
 		Images: []string{encodedImage},
 		Stream: false,

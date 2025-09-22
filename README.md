@@ -99,7 +99,7 @@ go get -t github.com/disintegration/imaging
 go run main.go --help
 
 # Example
-go run main.go --input ./images --output ./output --engine gosseract
+go run cmd/ocr-tool/main.go cmd/ocr-tool/cli.go --images ./examples --output ./output --engine gosseract
 ```
 
 ## 3. Run Tests

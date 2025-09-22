@@ -34,7 +34,7 @@
       "program": "${workspaceFolder}/cmd/ocr-tool",
       "args": [
         "--images",
-        "images",
+        "examples",
         "--output",
         "output",
         "--engine",

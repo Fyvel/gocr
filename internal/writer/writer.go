@@ -108,16 +108,27 @@ func (cw *CSVWriter[T]) writeToFileSync(data []T, outputPath string, mode WriteM
 	var file *os.File
 	var err error
 
-	// Open file in append mode if it exists and we are appending, otherwise create a new file
-	if mode == ModeAppend && hasHeader {
-		file, err = os.OpenFile(outputPath, os.O_APPEND|os.O_WRONLY, 0644)
-	} else {
+	// Handle file opening based on mode
+	if mode == ModeReplace {
+		// Replace mode: truncate/create file and reset header tracking
 		file, err = os.Create(outputPath)
-		if mode == ModeReplace {
-			cw.mu.Lock()
-			cw.headerTracker[outputPath] = false
-			hasHeader = false
-			cw.mu.Unlock()
+		cw.mu.Lock()
+		cw.headerTracker[outputPath] = false
+		hasHeader = false
+		cw.mu.Unlock()
+	} else {
+		// Append mode: open for append or create if doesn't exist
+		file, err = os.OpenFile(outputPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+
+		// If we're in append mode and don't have header tracking, check if file has content
+		if err == nil && !hasHeader {
+			// Check file size to determine if it already has content (and thus a header)
+			if stat, statErr := file.Stat(); statErr == nil && stat.Size() > 0 {
+				cw.mu.Lock()
+				cw.headerTracker[outputPath] = true
+				hasHeader = true
+				cw.mu.Unlock()
+			}
 		}
 	}
 

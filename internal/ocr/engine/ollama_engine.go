@@ -60,9 +60,31 @@ func (o *OllamaEngine) ProcessImage(imagePath string) (json.RawMessage, error) {
 	request := OllamaRequest{
 		Model: o.model,
 		Prompt: `
-		Perform OCR on the following image and fill out the JSON object below
-		{ "Name": "", "Email": "", "Phone": "", "Tags": []}
-		Leave missing properties empty.
+You are an OCR helper.  
+The image contains the following fields:
+
+• Name  
+• Email  
+• Phone  
+• Tags
+
+Your job:
+
+1. Extract the text for each field.  
+2. For *Tags*, capture every label.  
+3. If the OCR can't see any tags at all set Tags to '["MISS"]''.  
+4. Return **only** a JSON object with this exact schema:
+
+{
+  "Name": "<value or empty string>",
+  "Email": "<value or empty string>",
+  "Phone": "<value or empty string>",
+  "Tags": ["<tag1>", "<tag2>", ...]   // defaults to ["MISS"] if none detected
+}
+
+* Do not add any other text, explanations, or formatting.  
+* If a field is missing or unreadable, use an empty string (or default array for Tags).  
+* Make sure the JSON is syntactically correct – double quotes, no trailing commas, no comments.
 				`,
 		Images: []string{encodedImage},
 		Stream: false,
